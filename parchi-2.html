@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parchi — PDF se MCQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F4EC;
+    --paper-line:#DAD5C4;
+    --ink:#1F2A44;
+    --graphite:#5B6472;
+    --red:#C1392B;
+    --red-dark:#9A2E22;
+    --bubble:#2F3B52;
+    --mustard:#E8B94B;
+    --white:#FFFDF8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 33px,
+      var(--paper-line) 34px
+    );
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    min-height:100vh;
+    padding: 24px 16px 60px;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+  .wrap{max-width:720px;margin:0 auto;}
+
+  /* ---- Stamp header ---- */
+  .stamp-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;}
+  .stamp{
+    display:inline-block;
+    font-family:'Archivo Black',sans-serif;
+    font-size:28px;
+    letter-spacing:1px;
+    color:var(--red);
+    border:3px solid var(--red);
+    padding:6px 16px;
+    transform:rotate(-3deg);
+    border-radius:6px;
+    background:rgba(193,57,43,0.04);
+    position:relative;
+  }
+  .stamp::after{
+    content:"PDF → MCQ";
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:2px;
+    color:var(--red);
+    text-align:center;
+    margin-top:2px;
+    font-weight:600;
+  }
+  .tagline{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--graphite);text-align:right;line-height:1.5;}
+
+  /* ---- Card shell ---- */
+  .sheet{
+    background:var(--white);
+    border:1.5px solid var(--paper-line);
+    border-radius:10px;
+    box-shadow: 0 1px 0 var(--paper-line), 0 12px 30px -18px rgba(31,42,68,0.35);
+    padding:28px;
+    position:relative;
+  }
+  .sheet::before{ /* punch holes like a form */
+    content:"";
+    position:absolute; left:-9px; top:26px; bottom:26px; width:8px;
+    background-image: radial-gradient(circle, var(--paper) 3px, transparent 3.5px);
+    background-size: 8px 34px;
+    background-repeat: repeat-y;
+    opacity:0.9;
+  }
+
+  /* ---- Upload screen ---- */
+  .field-row{display:flex; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--graphite); letter-spacing:1px; margin-bottom:18px; gap:18px; text-transform:uppercase;}
+  .drop{
+    border:2.5px dashed var(--graphite);
+    border-radius:10px;
+    padding:44px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .18s ease, background .18s ease;
+  }
+  .drop:hover, .drop.drag{
+    border-color:var(--red);
+    background:rgba(193,57,43,0.04);
+  }
+  .drop input{display:none;}
+  .drop-icon{font-size:34px; margin-bottom:10px;}
+  .drop-title{font-weight:600; font-size:16px; margin-bottom:4px;}
+  .drop-sub{font-size:13px; color:var(--graphite);}
+  .filename-tag{
+    margin-top:16px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink);
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:8px 12px;
+    display:none;
+  }
+
+  /* ---- Processing screen ---- */
+  .proc-wrap{text-align:center; padding:20px 4px;}
+  .omr-grid{display:flex; justify-content:center; gap:10px; margin:22px 0;}
+  .omr-dot{
+    width:20px;height:20px;border-radius:50%;
+    border:2px solid var(--graphite);
+    position:relative;
+  }
+  .omr-dot .fill{
+    position:absolute; inset:2.5px; border-radius:50%; background:var(--bubble);
+    transform:scale(0); transition: transform .25s ease;
+  }
+  .omr-dot.on .fill{transform:scale(1);}
+  .proc-line{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--graphite); min-height:20px;}
+  .proc-bar-track{height:6px; background:var(--paper); border:1px solid var(--paper-line); border-radius:3px; margin-top:18px; overflow:hidden;}
+  .proc-bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--mustard), var(--red)); transition:width .3s ease;}
+
+  /* ---- Quiz screen ---- */
+  .quiz-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .qcount{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--graphite);}
+  .score-peek{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--red); font-weight:600;}
+  .progress-track{height:4px; background:var(--paper-line); border-radius:2px; overflow:hidden; margin-bottom:24px;}
+  .progress-fill{height:100%; background:var(--ink); transition:width .25s ease;}
+
+  .qnum-box{
+    display:inline-flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px;
+    color:var(--red); border:2px solid var(--red); border-radius:6px;
+    width:34px; height:28px; margin-bottom:14px; transform:rotate(-1deg);
+  }
+  .qtext{font-size:18px; font-weight:600; line-height:1.5; margin-bottom:22px;}
+
+  .option{
+    display:flex; align-items:center; gap:14px;
+    padding:12px 14px; border-radius:8px; margin-bottom:10px;
+    border:1.5px solid var(--paper-line); cursor:pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .option:hover{border-color:var(--graphite);}
+  .bubble{
+    width:26px;height:26px;min-width:26px;border-radius:50%;
+    border:2px solid var(--ink); position:relative; flex-shrink:0;
+  }
+  .bubble .ink{
+    position:absolute; inset:3px; border-radius:50%; background:var(--bubble);
+    transform:scale(0); transition:transform .15s ease;
+  }
+  .option.selected .bubble .ink{transform:scale(1);}
+  .option.selected{border-color:var(--ink); background:rgba(47,59,82,0.04);}
+  .opt-letter{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--graphite); width:14px;}
+  .opt-text{font-size:15px; flex:1;}
+
+  .option.correct{border-color:#2E7D46; background:rgba(46,125,70,0.06);}
+  .option.correct .bubble{border-color:#2E7D46;}
+  .option.correct .bubble .ink{background:#2E7D46; transform:scale(1);}
+  .option.wrong{border-color:var(--red); background:rgba(193,57,43,0.06);}
+  .option.wrong .bubble{border-color:var(--red);}
+  .option.wrong .bubble .ink{background:var(--red); transform:scale(1);}
+
+  .explain{
+    font-size:13px; color:var(--graphite); margin-top:14px; padding:10px 12px;
+    border-left:3px solid var(--mustard); background:rgba(232,185,75,0.08); border-radius:0 6px 6px 0;
+    display:none;
+  }
+
+  .nav-row{display:flex; justify-content:space-between; margin-top:26px; gap:10px;}
+  button{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px;
+    letter-spacing:0.5px; text-transform:uppercase;
+    border:2px solid var(--ink); border-radius:7px; background:var(--white);
+    color:var(--ink); padding:11px 18px; cursor:pointer;
+    transition: transform .1s ease, background .15s ease;
+  }
+  button:hover{background:var(--ink); color:var(--white);}
+  button:disabled{opacity:0.35; cursor:not-allowed;}
+  button:disabled:hover{background:var(--white); color:var(--ink);}
+  .btn-primary{background:var(--red); border-color:var(--red); color:var(--white);}
+  .btn-primary:hover{background:var(--red-dark); border-color:var(--red-dark);}
+  .btn-primary:disabled:hover{background:var(--red);}
+
+  /* ---- Results screen ---- */
+  .grade-stamp{
+    width:120px;height:120px;border-radius:50%;
+    border:4px solid var(--red); color:var(--red);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    margin:6px auto 22px; transform:rotate(-6deg);
+    font-family:'Archivo Black',sans-serif;
+  }
+  .grade-stamp .big{font-size:30px; line-height:1;}
+  .grade-stamp .small{font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1px; margin-top:4px;}
+  .result-title{text-align:center; font-size:15px; color:var(--graphite); font-family:'IBM Plex Mono',monospace; margin-bottom:26px;}
+
+  .review-item{border-top:1px solid var(--paper-line); padding:16px 0;}
+  .review-q{font-weight:600; font-size:14px; margin-bottom:8px; display:flex; gap:8px;}
+  .review-tag{font-family:'IBM Plex Mono',monospace; font-size:11px; padding:2px 7px; border-radius:4px; height:fit-content;}
+  .tag-right{background:rgba(46,125,70,0.12); color:#2E7D46;}
+  .tag-wrong{background:rgba(193,57,43,0.12); color:var(--red);}
+  .review-opt{font-size:13px; padding:4px 0; color:var(--graphite);}
+  .review-opt.was-correct{color:#2E7D46; font-weight:600;}
+  .review-opt.was-picked-wrong{color:var(--red); font-weight:600; text-decoration:line-through;}
+
+  .footer-note{text-align:center; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--graphite); margin-top:22px;}
+  .err{color:var(--red); font-size:13px; font-family:'IBM Plex Mono',monospace; margin-top:14px; text-align:center;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="stamp-row">
+    <div class="stamp">PARCHI</div>
+    <div class="tagline">pdf upload karo<br>test tayyar milega</div>
+  </div>
+
+  <!-- UPLOAD SCREEN -->
+  <div class="sheet" id="screen-upload">
+    <div class="field-row">
+      <span>Format: PDF</span><span>Mode: Auto-Detail</span><span>Speed: Fast</span>
+    </div>
+    <label class="drop" id="dropZone">
+      <input type="file" id="fileInput" accept="application/pdf">
+      <div class="drop-icon">📄</div>
+      <div class="drop-title">PDF yahaan drop karo ya tap karke chuno</div>
+      <div class="drop-sub">Har fact, number, definition — sab pe MCQ banega</div>
+      <div class="filename-tag" id="filenameTag"></div>
+    </label>
+    <div class="err hidden" id="uploadErr"></div>
+    <div style="margin-top:18px; border-top:1px solid var(--paper-line); padding-top:16px;">
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--graphite); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Anthropic API Key (sirf is browser me save hoti hai)</div>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-..." style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:13px; padding:10px 12px; border:1.5px solid var(--paper-line); border-radius:7px; background:var(--paper); color:var(--ink);">
+      <div style="font-size:11px; color:var(--graphite); margin-top:6px;">Key <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--red);">console.anthropic.com</a> se milegi. Yeh direct browser se API call karti hai — sirf apne personal use ke liye rakho, kisi ke saath share mat karo.</div>
+    </div>
+  </div>
+
+  <!-- PROCESSING SCREEN -->
+  <div class="sheet hidden" id="screen-processing">
+    <div class="proc-wrap">
+      <div class="omr-grid" id="omrGrid"></div>
+      <div class="proc-line" id="procLine">PDF padha ja raha hai...</div>
+      <div class="proc-bar-track"><div class="proc-bar-fill" id="procBar"></div></div>
+    </div>
+  </div>
+
+  <!-- QUIZ SCREEN -->
+  <div class="sheet hidden" id="screen-quiz">
+    <div class="quiz-top">
+      <span class="qcount" id="qCount">Q 1 / 10</span>
+      <span class="score-peek" id="scorePeek"></span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="qnum-box" id="qNumBox">Q1</div>
+    <div class="qtext" id="qText"></div>
+    <div id="optionsBox"></div>
+    <div class="explain" id="explainBox"></div>
+    <div class="nav-row">
+      <button id="btnSkip">Skip</button>
+      <button class="btn-primary" id="btnNext" disabled>Check &amp; Next</button>
+    </div>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div class="sheet hidden" id="screen-results">
+    <div class="grade-stamp"><span class="big" id="gradeScore">0/0</span><span class="small">CHECKED</span></div>
+    <div class="result-title" id="resultTitle"></div>
+    <div id="reviewList"></div>
+    <div class="nav-row">
+      <button id="btnRestart">New PDF</button>
+      <button class="btn-primary" id="btnRetryWrong">Retry Wrong Ones</button>
+    </div>
+  </div>
+
+  <div class="footer-note">Parchi · in-browser PDF reading, Claude-powered questions</div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------- State ----------
+let allQuestions = [];
+let quizOrder = [];
+let currentIdx = 0;
+let score = 0;
+let answers = []; // {qIndex, picked, correctIdx, correct}
+let selectedOption = null;
+let locked = false;
+
+// ---------- Elements ----------
+const screens = {
+  upload: document.getElementById('screen-upload'),
+  processing: document.getElementById('screen-processing'),
+  quiz: document.getElementById('screen-quiz'),
+  results: document.getElementById('screen-results'),
+};
+function showScreen(name){
+  Object.values(screens).forEach(s=>s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+}
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const filenameTag = document.getElementById('filenameTag');
+const uploadErr = document.getElementById('uploadErr');
+
+['dragover','dragenter'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{dropZone.classList.remove('drag');}));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+
+function handleFile(file){
+  uploadErr.classList.add('hidden');
+  if(file.type !== 'application/pdf'){
+    uploadErr.textContent = 'Sirf PDF file chahiye.';
+    uploadErr.classList.remove('hidden');
+    return;
+  }
+  const key = apiKeyInput.value.trim();
+  if(!key){
+    uploadErr.textContent = 'Pehle apni Anthropic API key daalo.';
+    uploadErr.classList.remove('hidden');
+    return;
+  }
+  try{ localStorage.setItem('parchi_api_key', key); }catch(e){}
+  filenameTag.textContent = '📎 ' + file.name;
+  filenameTag.style.display = 'block';
+  processFile(file);
+}
+
+const apiKeyInput = document.getElementById('apiKeyInput');
+try{
+  const savedKey = localStorage.getItem('parchi_api_key');
+  if(savedKey) apiKeyInput.value = savedKey;
+}catch(e){}
+
+// ---------- OMR loading animation ----------
+const omrGrid = document.getElementById('omrGrid');
+for(let i=0;i<5;i++){
+  const d = document.createElement('div');
+  d.className='omr-dot';
+  d.innerHTML='<div class="fill"></div>';
+  omrGrid.appendChild(d);
+}
+let omrTimer = null;
+function startOmrAnim(){
+  const dots = omrGrid.querySelectorAll('.omr-dot');
+  let i = 0;
+  omrTimer = setInterval(()=>{
+    dots.forEach(d=>d.classList.remove('on'));
+    dots[i % dots.length].classList.add('on');
+    i++;
+  }, 260);
+}
+function stopOmrAnim(){ clearInterval(omrTimer); omrGrid.querySelectorAll('.omr-dot').forEach(d=>d.classList.remove('on')); }
+
+function setProcLine(text, pct){
+  document.getElementById('procLine').textContent = text;
+  if(pct !== undefined) document.getElementById('procBar').style.width = pct + '%';
+}
+
+// ---------- PDF extraction ----------
+async function extractPdfPages(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  const pages = [];
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
+    pages.push(text);
+    setProcLine(`Page ${i} / ${pdf.numPages} padhi ja rahi hai...`, 10 + (i/pdf.numPages)*20);
+  }
+  return pages;
+}
+
+function chunkPages(pages, maxChars){
+  const chunks = [];
+  let cur = '';
+  for(const p of pages){
+    if((cur + ' ' + p).length > maxChars && cur.length > 0){
+      chunks.push(cur.trim());
+      cur = p;
+    } else {
+      cur = cur ? cur + ' ' + p : p;
+    }
+  }
+  if(cur.trim()) chunks.push(cur.trim());
+  return chunks;
+}
+
+// ---------- MCQ generation ----------
+async function generateMcqsForChunk(chunk, idx){
+  const sys = "You are a meticulous exam-setter. From the given study material excerpt, write multiple-choice questions that test EVERY specific detail: facts, numbers, dates, names, definitions, formulas, cause-effect, exceptions — not just the main idea. Skip nothing testable. Keep each question and each option under 20 words, and explanations to one short sentence. Return ONLY a raw JSON array, no markdown, no preamble, no code fences. Each item must be: {\"q\":\"...\",\"options\":[\"a\",\"b\",\"c\",\"d\"],\"correct\":0,\"explanation\":\"...\"}. correct is the 0-based index of the right option in the options array. Generate as many questions as the density of distinct facts in the text justifies (roughly 1 question per distinct fact), typically 3-7 for a short excerpt.";
+
+  try{
+    const apiKey = (document.getElementById('apiKeyInput').value || '').trim() || localStorage.getItem('parchi_api_key') || '';
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1500,
+        system: sys,
+        messages: [{role:"user", content: chunk}]
+      })
+    });
+    if(!response.ok){
+      const errBody = await response.text();
+      console.error('API error', response.status, errBody);
+      return [];
+    }
+    const data = await response.json();
+    let text = (data.content || []).map(b=>b.text||'').join('');
+    text = text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+    const parsed = JSON.parse(text);
+    if(!Array.isArray(parsed)) return [];
+    return parsed.filter(q => q && q.q && Array.isArray(q.options) && q.options.length===4 && typeof q.correct === 'number');
+  }catch(err){
+    console.error('chunk', idx, 'failed', err);
+    return [];
+  }
+}
+
+function shuffleOptions(q){
+  const opts = q.options.map((text, i)=>({text, isCorrect: i===q.correct}));
+  for(let i=opts.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  const correctIdx = opts.findIndex(o=>o.isCorrect);
+  return { q: q.q, options: opts.map(o=>o.text), correct: correctIdx, explanation: q.explanation || '' };
+}
+
+async function processFile(file){
+  showScreen('processing');
+  startOmrAnim();
+  setProcLine('PDF khola ja raha hai...', 2);
+  try{
+    const pages = await extractPdfPages(file);
+    const fullLen = pages.join('').length;
+    if(fullLen < 20){
+      throw new Error('PDF me readable text nahi mila (shayad scanned image hai).');
+    }
+    const chunks = chunkPages(pages, 2400);
+    setProcLine(`${chunks.length} sections mile — questions ban rahe hain...`, 35);
+
+    const results = await Promise.all(chunks.map((c,i)=>generateMcqsForChunk(c,i).then(r=>{
+      setProcLine(`Section ${i+1}/${chunks.length} se questions tayyar...`, 35 + ((i+1)/chunks.length)*55);
+      return r;
+    })));
+
+    let merged = results.flat();
+    if(merged.length === 0){
+      throw new Error('Koi MCQ nahi ban paaya — API key check karo (galat ho sakti hai, ya credits khatam), ya browser console (F12) me exact error dekho.');
+    }
+    // shuffle question order + option order
+    merged = merged.map(shuffleOptions);
+    for(let i=merged.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [merged[i], merged[j]] = [merged[j], merged[i]];
+    }
+    allQuestions = merged;
+    setProcLine(`${merged.length} questions ready!`, 100);
+    setTimeout(()=>{ stopOmrAnim(); startQuiz(); }, 400);
+  }catch(err){
+    stopOmrAnim();
+    showScreen('upload');
+    uploadErr.textContent = err.message || 'Kuch galat ho gaya, dobara try karo.';
+    uploadErr.classList.remove('hidden');
+  }
+}
+
+// ---------- Quiz flow ----------
+function startQuiz(){
+  quizOrder = allQuestions.map((_,i)=>i);
+  currentIdx = 0;
+  score = 0;
+  answers = [];
+  showScreen('quiz');
+  renderQuestion();
+}
+
+function renderQuestion(){
+  selectedOption = null;
+  locked = false;
+  const qIdx = quizOrder[currentIdx];
+  const q = allQuestions[qIdx];
+
+  document.getElementById('qCount').textContent = `Q ${currentIdx+1} / ${quizOrder.length}`;
+  document.getElementById('scorePeek').textContent = `Score: ${score}`;
+  document.getElementById('progressFill').style.width = `${(currentIdx/quizOrder.length)*100}%`;
+  document.getElementById('qNumBox').textContent = `Q${currentIdx+1}`;
+  document.getElementById('qText').textContent = q.q;
+
+  const box = document.getElementById('optionsBox');
+  box.innerHTML = '';
+  const letters = ['A','B','C','D'];
+  q.options.forEach((optText, i)=>{
+    const el = document.createElement('div');
+    el.className = 'option';
+    el.innerHTML = `<div class="bubble"><div class="ink"></div></div><span class="opt-letter">${letters[i]}</span><span class="opt-text"></span>`;
+    el.querySelector('.opt-text').textContent = optText;
+    el.addEventListener('click', ()=> selectOption(i, el));
+    box.appendChild(el);
+  });
+
+  document.getElementById('explainBox').style.display = 'none';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnNext').textContent = 'Check & Next';
+  document.getElementById('btnSkip').disabled = false;
+}
+
+function selectOption(i, el){
+  if(locked) return;
+  document.querySelectorAll('.option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedOption = i;
+  document.getElementById('btnNext').disabled = false;
+}
+
+document.getElementById('btnNext').addEventListener('click', ()=>{
+  if(!locked && selectedOption !== null){
+    lockAnswer();
+  } else if(locked){
+    goNext();
+  }
+});
+document.getElementById('btnSkip').addEventListener('click', ()=>{
+  if(locked){ goNext(); return; }
+  const qIdx = quizOrder[currentIdx];
+  answers.push({qIndex: qIdx, picked: null, correct: false});
+  goNext();
+});
+
+function lockAnswer(){
+  locked = true;
+  const qIdx = quizOrder[currentIdx];
+  const q = allQuestions[qIdx];
+  const opts = document.querySelectorAll('.option');
+  const isCorrect = selectedOption === q.correct;
+  if(isCorrect) score++;
+  opts.forEach((el, i)=>{
+    if(i === q.correct) el.classList.add('correct');
+    else if(i === selectedOption) el.classList.add('wrong');
+  });
+  if(q.explanation){
+    const eb = document.getElementById('explainBox');
+    eb.textContent = q.explanation;
+    eb.style.display = 'block';
+  }
+  document.getElementById('scorePeek').textContent = `Score: ${score}`;
+  document.getElementById('btnNext').textContent = currentIdx === quizOrder.length-1 ? 'See Result' : 'Next →';
+  document.getElementById('btnSkip').disabled = true;
+  answers.push({qIndex: qIdx, picked: selectedOption, correct: isCorrect});
+}
+
+function goNext(){
+  if(currentIdx < quizOrder.length - 1){
+    currentIdx++;
+    renderQuestion();
+  } else {
+    showResults();
+  }
+}
+
+// ---------- Results ----------
+function showResults(){
+  showScreen('results');
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('gradeScore').textContent = `${score}/${quizOrder.length}`;
+  const pct = Math.round((score/quizOrder.length)*100);
+  let title = 'Dobara revise karo';
+  if(pct >= 90) title = 'Bahut badhiya! Full tayyari.';
+  else if(pct >= 70) title = 'Achha score — thoda aur polish karo.';
+  else if(pct >= 40) title = 'Theek-thaak — weak areas revise karo.';
+  document.getElementById('resultTitle').textContent = `${pct}% correct · ${title}`;
+
+  const list = document.getElementById('reviewList');
+  list.innerHTML = '';
+  answers.forEach((a, i)=>{
+    const q = allQuestions[a.qIndex];
+    const item = document.createElement('div');
+    item.className = 'review-item';
+    const tag = a.correct ? '<span class="review-tag tag-right">Right</span>' : '<span class="review-tag tag-wrong">Wrong</span>';
+    let optsHtml = '';
+    q.options.forEach((opt, oi)=>{
+      let cls = 'review-opt';
+      if(oi === q.correct) cls += ' was-correct';
+      else if(oi === a.picked) cls += ' was-picked-wrong';
+      optsHtml += `<div class="${cls}">${['A','B','C','D'][oi]}. ${opt}</div>`;
+    });
+    item.innerHTML = `<div class="review-q">${tag}<span>${i+1}. ${q.q}</span></div>${optsHtml}`;
+    list.appendChild(item);
+  });
+
+  const wrongCount = answers.filter(a=>!a.correct).length;
+  const retryBtn = document.getElementById('btnRetryWrong');
+  retryBtn.disabled = wrongCount === 0;
+  retryBtn.textContent = wrongCount === 0 ? 'Sab Sahi!' : `Retry ${wrongCount} Wrong`;
+}
+
+document.getElementById('btnRestart').addEventListener('click', ()=>{
+  allQuestions = []; quizOrder=[]; currentIdx=0; score=0; answers=[];
+  filenameTag.style.display = 'none';
+  fileInput.value = '';
+  showScreen('upload');
+});
+
+document.getElementById('btnRetryWrong').addEventListener('click', ()=>{
+  const wrongIdx = answers.filter(a=>!a.correct).map(a=>a.qIndex);
+  if(wrongIdx.length === 0) return;
+  quizOrder = wrongIdx;
+  currentIdx = 0;
+  score = 0;
+  answers = [];
+  showScreen('quiz');
+  renderQuestion();
+});
+</script>
+</body>
+</html>
